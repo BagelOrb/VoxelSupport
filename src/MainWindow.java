@@ -19,6 +19,8 @@ public class MainWindow implements Runnable, ActionListener {
 	private BufferedImage distance;
 	private BufferedImage support;
 	
+	private BufferedImage solution;
+	
 	protected JFrame f;
 
     @Override
@@ -29,6 +31,7 @@ public class MainWindow implements Runnable, ActionListener {
         f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         // Add a layout manager so that the button is not placed on top of the label
         f.setLayout(new GridBagLayout());
+        GridBagConstraints c = new GridBagConstraints();
         
         JPanel pica_panel = new JPanel(new FlowLayout());
         // add pica
@@ -45,22 +48,28 @@ public class MainWindow implements Runnable, ActionListener {
         	pica_panel.add(outLabel);
         } catch (IOException e) { System.out.println("Couldn't open file!"); }
         f.add(pica_panel);
+
+        c.gridx = 2;
+        JPanel sol_panel = new JPanel(new FlowLayout());
+        solution = getSolution();
+        Image sol_big = solution.getScaledInstance(512, 512, Image.SCALE_FAST);
+        f.add(sol_panel);
         
         JPanel options_panel = new JPanel(new BorderLayout());
         options_panel.add(new JLabel("Options"), BorderLayout.PAGE_START);
         { // get options
         	JPanel options = new JPanel(new GridBagLayout());
-            GridBagConstraints c = new GridBagConstraints();
+            GridBagConstraints c2 = new GridBagConstraints();
         	
 	        // Add go button
-            c.gridy = 0;
+            c2.gridy = 0;
 	        JButton button = new JButton("Go!");
 	        button.setActionCommand("go");
 	        button.addActionListener(this);
 	        options.add(button);
 
 	        // add single step button
-            c.gridy = 1;
+            c2.gridy = 1;
 	        JButton step_button = new JButton("Step.");
 	        button.setActionCommand("step");
 	        button.addActionListener(this);
@@ -68,7 +77,6 @@ public class MainWindow implements Runnable, ActionListener {
 	        
         	options_panel.add(options);
         }
-        GridBagConstraints c = new GridBagConstraints();
         c.gridy = 2;
         f.add(options_panel, c);
         
@@ -85,6 +93,69 @@ public class MainWindow implements Runnable, ActionListener {
         SwingUtilities.invokeLater(se);
 	}
 
+	public BufferedImage getSolution()
+	{
+		System.out.println("" + (long)(1 << (input.getWidth() * input.getHeight())));
+		BufferedImage best_solution = new BufferedImage(input.getWidth(), input.getHeight(), BufferedImage.TYPE_USHORT_GRAY);
+		int best_cost = 9999;
+		BufferedImage current = new BufferedImage(input.getWidth(), input.getHeight(), BufferedImage.TYPE_USHORT_GRAY);
+		for (long sol_nr = 0; sol_nr < 1l << (input.getWidth() * input.getHeight()); sol_nr++)
+		{
+			long sol_nr_mod = sol_nr;
+			for (int cel_nr = 0; cel_nr < input.getWidth() * input.getHeight(); cel_nr++)
+			{
+				if (model.getRaster().getDataBuffer().getElem(cel_nr) == 0)
+				{
+					int val = (int) (sol_nr_mod % 2);
+					current.getRaster().getDataBuffer().setElem(cel_nr, val);
+				}
+				else
+				{
+					current.getRaster().getDataBuffer().setElem(cel_nr, 1);
+				}
+				sol_nr_mod = sol_nr_mod >> 1;
+			
+			}
+
+			int cost = 0;
+			for (int x = 0; x < current.getWidth(); x++)
+				for (int y = 0; y < current.getHeight(); y++)
+					cost += current.getRaster().getSample(x, y, 0);
+			
+			boolean is_valid = true;
+			for (int x = 0; x < current.getWidth() && is_valid; x++)
+				for (int y = 0; y < current.getHeight() - 1 && is_valid; y++)
+				{
+					if (current.getRaster().getSample(x, y, 0) > 0)
+					{
+						boolean has_support = false;
+						for (int x_below = Math.max(0,  x - 1); x_below < Math.min(current.getWidth() - 1,  x + 1) && !has_support; x_below++)
+						{
+							if (current.getRaster().getSample(x_below, y, 0) > 0)
+							{
+								has_support = true;
+							}
+						}
+						if (!has_support)
+							is_valid = false;
+					}
+				}
+			
+			if (!is_valid) 
+				continue;
+			
+			if (cost < best_cost)
+			{
+				best_cost = cost;
+				best_solution.setData(current.getRaster());
+			}
+				
+		}
+
+		System.out.println("done");
+		return best_solution;
+	}
+	
 	public BufferedImage getModel()
 	{
 		BufferedImage ret = new BufferedImage(input.getWidth(), input.getHeight(), BufferedImage.TYPE_USHORT_GRAY);
