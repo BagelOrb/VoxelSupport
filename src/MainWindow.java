@@ -3,6 +3,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.image.*;
 import java.io.*;
+import java.util.ArrayList;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -10,7 +11,10 @@ import javax.swing.SpringLayout.Constraints;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
-public class MainWindow implements Runnable, ActionListener {
+import grid.BruteSolver;
+import grid.Grid;
+
+class MainWindow implements Runnable, ActionListener {
 
 
 	String im_location = "resources/model.png";
@@ -19,7 +23,11 @@ public class MainWindow implements Runnable, ActionListener {
 	private BufferedImage distance;
 	private BufferedImage support;
 	
+	private Grid grid;
+	private BruteSolver solver;
+	
 	private BufferedImage solution;
+	private JLabel sol_label;
 	
 	protected JFrame f;
 
@@ -51,10 +59,20 @@ public class MainWindow implements Runnable, ActionListener {
 
         c.gridx = 2;
         JPanel sol_panel = new JPanel(new FlowLayout());
-        solution = getSolution();
-        Image sol_big = solution.getScaledInstance(512, 512, Image.SCALE_FAST);
+        {
+    		try {
+	            BufferedImage input = ImageIO.read(new File(im_location));
+		        grid = new Grid(input);
+		        solver = new BruteSolver(grid);
+		        solution = solver.getCurrentSolution().toImage();
+		        Image sol_big = solution.getScaledInstance(512, 512, Image.SCALE_FAST);
+		    	sol_label = new JLabel(new ImageIcon(sol_big));
+		    	sol_panel.add(sol_label);
+            } catch (IOException e) { System.out.println("Couldn't open file!"); }
+        }
         f.add(sol_panel);
-        
+
+        c.gridx = 1;
         JPanel options_panel = new JPanel(new BorderLayout());
         options_panel.add(new JLabel("Options"), BorderLayout.PAGE_START);
         { // get options
@@ -71,9 +89,17 @@ public class MainWindow implements Runnable, ActionListener {
 	        // add single step button
             c2.gridy = 1;
 	        JButton step_button = new JButton("Step.");
-	        button.setActionCommand("step");
-	        button.addActionListener(this);
+	        step_button.setActionCommand("step");
+	        step_button.addActionListener(this);
 	        options.add(step_button);
+	        
+	        
+	        // add multi step button
+	        c2.gridy = 2;
+	        JButton multi_step_button = new JButton("Multi-Step.");
+	        multi_step_button.setActionCommand("multi_step");
+	        multi_step_button.addActionListener(this);
+	        options.add(multi_step_button);
 	        
         	options_panel.add(options);
         }
@@ -97,8 +123,34 @@ public class MainWindow implements Runnable, ActionListener {
 	{
 		System.out.println("" + (long)(1 << (input.getWidth() * input.getHeight())));
 		BufferedImage best_solution = new BufferedImage(input.getWidth(), input.getHeight(), BufferedImage.TYPE_USHORT_GRAY);
+		/*
 		int best_cost = 9999;
-		BufferedImage current = new BufferedImage(input.getWidth(), input.getHeight(), BufferedImage.TYPE_USHORT_GRAY);
+		class Choice
+		{
+			public Choice(int x2, int y2, int dir)
+			{
+				x = x2;
+				y = y2;
+				support_dir = dir;
+			}
+			int x, y;
+			int support_dir = -1;
+		}
+		ArrayList<Choice> choices = new ArrayList<Choice>();
+		BufferedImage current = getModel();
+		
+		// construct initial solution
+		for (int y = 0; y < input.getHeight() - 1; y++)
+		{
+			for (int x = 0; x < input.getWidth(); x++)
+			{
+				if (model.getRaster().getSample(x, y, 0) == 2)
+				{
+					choices.add(new Choice(x, y, -1));
+				}
+			}
+		}
+		
 		for (long sol_nr = 0; sol_nr < 1l << (input.getWidth() * input.getHeight()); sol_nr++)
 		{
 			long sol_nr_mod = sol_nr;
@@ -153,6 +205,7 @@ public class MainWindow implements Runnable, ActionListener {
 		}
 
 		System.out.println("done");
+		*/
 		return best_solution;
 	}
 	
@@ -315,10 +368,33 @@ public class MainWindow implements Runnable, ActionListener {
 			System.out.println("");
 		}
 	}
-	
+
 	public void step()
 	{
-		
+		solver.nextSolution();
+		solver.getCurrentSolution().outputSupportDir();
+        BufferedImage im = solver.getCurrentSolution().toImage();
+        Image resized = im.getScaledInstance(512, 512, Image.SCALE_FAST);
+        sol_label.setIcon(new ImageIcon(resized));
+	}
+	public void multi_step()
+	{
+		for (int i = 0; i < 250; i++)
+		{
+			solver.nextSolution();
+		}
+		solver.getCurrentSolution().outputSupportDir();
+		BufferedImage im = solver.getCurrentSolution().toImage();
+		Image resized = im.getScaledInstance(512, 512, Image.SCALE_FAST);
+		sol_label.setIcon(new ImageIcon(resized));
+	}
+	public void solve()
+	{
+		solver.findBestSolution();
+        BufferedImage im = solver.getBestSolution().toImage();
+        Image resized = im.getScaledInstance(512, 512, Image.SCALE_FAST);
+        sol_label.setIcon(new ImageIcon(resized));
+        System.out.println("SOLVED!");
 	}
 	
 	@Override
@@ -326,6 +402,16 @@ public class MainWindow implements Runnable, ActionListener {
 		if (e.getActionCommand().equals("step"))
 		{
 			step();
+			f.update(f.getGraphics());
+		}
+		else if (e.getActionCommand().equals("multi_step"))
+		{
+			multi_step();
+			f.update(f.getGraphics());
+		}
+		else if (e.getActionCommand().equals("go"))
+		{
+			solve();
 			f.update(f.getGraphics());
 		}
 	}
